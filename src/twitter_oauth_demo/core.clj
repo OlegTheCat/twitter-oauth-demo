@@ -106,7 +106,7 @@
           (merge (redirect "/tweet-menu")
                  {:cookies {"session-id" {:value session-id}}})))))
   (GET "/exec-logout" {cookies :cookies}
-    (println "Cookies: " cookies)
+    ;; (println "Cookies: " cookies)
     (when-let [session-id (:value (cookies "session-id"))]
       (state/invalidate-session! session-id))
     (merge (redirect "/")
