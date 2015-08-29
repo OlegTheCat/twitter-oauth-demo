@@ -32,18 +32,18 @@
 
 (defn session-guard [handler]
   (fn [req]
-    ;; (println "In session guard")
-    ;; (println "Current user id: " *current-user-id*)
-    ;; (println)
+    (println "In session guard")
+    (println "Current user id: " *current-user-id*)
+    (println)
     (if *current-user-id*
       (handler req)
       (redirect "/"))))
 
 (defn wrap-current-user-id [handler]
   (fn [req]
-    ;; (println "In wrap-current-user-id")
-    ;; (println "Cookies: " (:cookies req))
-    ;; (println)
+    (println "In wrap-current-user-id")
+    (println "Cookies: " (:cookies req))
+    (println)
     (let [{:strs [session-id]} (:cookies req)]
       (binding [*current-user-id*
                 (and
@@ -54,13 +54,12 @@
 
 (defn wrap-valid-access-token [handler]
   (fn [req]
-    ;; (println "In wrap-valid-access-token")
-    ;; (println "Current user id: " *current-user-id*)
-    ;; (println)
+    (println "In wrap-valid-access-token")
+    (println "Current user id: " *current-user-id*)
     (if *current-user-id*
       (let [access-token (state/<get-access-token-by-user-id
                           *current-user-id*)]
-        ;; (println "Access token: " access-token)
+        (println "Token valid?: " (twitter-demo.oauth/valid-access-token? consumer access-token))
         (if (twitter-demo.oauth/valid-access-token? consumer access-token)
           (handler req)
           (redirect "/exec-login")))
@@ -72,14 +71,16 @@
       (redirect "/tweet-menu")
       (handler req))))
 
-(defroutes public-routes
+(defroutes login-routes
   (GET "/" []
+    (println "At /")
     (html5
      [:body
       (form-to
        [:get "/exec-login"]
        (submit-button "Log in with Twitter"))]))
   (GET "/exec-login" []
+    (println "At /exec-login")
     (let [request-token (oauth/request-token consumer "http://localhost:4343/logged")]
       (merge (redirect
               (oauth/user-approval-uri
@@ -87,8 +88,9 @@
                (:oauth_token request-token)))
              {:cookies request-token})))
   (GET "/logged" {params :params cookies :cookies}
-    (println "params: " params)
-    (println "cookies: " cookies)
+    (println "At /logged")
+    ;; (println "params: " params)
+    ;; (println "cookies: " cookies)
     (let [request-token (construct-request-token-from-cookies cookies)
           verifier (params "oauth_verifier")]
       (when (and request-token verifier)
@@ -104,7 +106,9 @@
            access-token
            session-id)
           (merge (redirect "/tweet-menu")
-                 {:cookies {"session-id" {:value session-id}}})))))
+                 {:cookies {"session-id" {:value session-id}}}))))))
+
+(defroutes logout-routes
   (GET "/exec-logout" {cookies :cookies}
     ;; (println "Cookies: " cookies)
     (when-let [session-id (:value (cookies "session-id"))]
@@ -114,6 +118,7 @@
 
 (defroutes protected-routes
   (GET "/tweet-menu" []
+    (println "At /tweet-menu")
     (html5
      [:body
       (form-to
@@ -131,10 +136,11 @@
       (redirect "/tweet-menu"))))
 
 (defroutes app
-  public-routes
+  (wrap-routes login-routes redirect-to-menu-if-logged)
+  logout-routes
   (-> protected-routes
-      session-guard
-      wrap-valid-access-token)
+      (wrap-routes session-guard)
+      (wrap-routes wrap-valid-access-token))
   (route/not-found "<h1>Page not found</h1>"))
 
 (comment
