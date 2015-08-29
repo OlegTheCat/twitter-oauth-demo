@@ -6,6 +6,7 @@
             [ring.util.response :refer [redirect]]
             [ring.middleware.params :refer [wrap-params]]
             [ring.middleware.cookies :refer [wrap-cookies]]
+            [ring.middleware.stacktrace :refer [wrap-stacktrace]]
 
             [hiccup.core :refer :all]
             [hiccup.form :refer :all]
@@ -48,7 +49,7 @@
                 (and
                  session-id
                  (:value session-id)
-                 (state/get-user-id-by-session-id @state/app-state (:value session-id)))]
+                 (state/<get-user-id-by-session-id (:value session-id)))]
         (handler req)))))
 
 (defn wrap-valid-access-token [handler]
@@ -57,10 +58,9 @@
     ;; (println "Current user id: " *current-user-id*)
     ;; (println)
     (if *current-user-id*
-      (let [access-token (state/get-access-token-by-user-id
-                          @state/app-state
+      (let [access-token (state/<get-access-token-by-user-id
                           *current-user-id*)]
-        (println "Access token: " access-token)
+        ;; (println "Access token: " access-token)
         (if (twitter-demo.oauth/valid-access-token? consumer access-token)
           (handler req)
           (redirect "/exec-login")))
@@ -98,15 +98,17 @@
                             verifier)
               session-id (state/gen-session-id)]
           (println "access token: " access-token)
-          (swap! state/app-state
-                 state/add-new-user
-                 (:user_id access-token)
-                 (:screen_name access-token)
-                 access-token
-                 session-id)
+          (state/add-new-user!
+           (:user_id access-token)
+           (:screen_name access-token)
+           access-token
+           session-id)
           (merge (redirect "/tweet-menu")
                  {:cookies {"session-id" {:value session-id}}})))))
-  (GET "/exec-logout" []
+  (GET "/exec-logout" {cookies :cookies}
+    (println "Cookies: " cookies)
+    (when-let [session-id (:value (cookies "session-id"))]
+      (state/invalidate-session! session-id))
     (merge (redirect "/")
            {:cookies {"session-id" {:value "kill", :max-age 1}}})))
 
@@ -123,7 +125,7 @@
     (println "Tweet is: " tweet)
     (let [creds (twitter-demo.oauth/make-oauth-creds
                  consumer
-                 (state/get-access-token-by-user-id @state/app-state *current-user-id*))]
+                 (state/<get-access-token-by-user-id *current-user-id*))]
       (restful/statuses-update :oauth-creds creds
                           :params {:status tweet})
       (redirect "/tweet-menu"))))
@@ -139,4 +141,5 @@
   (def server (jetty/run-jetty (-> #'app
                                    wrap-current-user-id
                                    wrap-params
-                                   wrap-cookies) {:port 4343 :join? false})))
+                                   wrap-cookies
+                                   wrap-stacktrace) {:port 4343 :join? false})))
