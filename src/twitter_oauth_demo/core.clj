@@ -3,7 +3,7 @@
             [compojure.route :as route]
 
             [ring.adapter.jetty :as jetty]
-            [ring.util.response :refer [redirect response]]
+            [ring.util.response :refer [redirect]]
             [ring.middleware.params :refer [wrap-params]]
             [ring.middleware.cookies :refer [wrap-cookies]]
 
@@ -12,12 +12,8 @@
             [hiccup.def :refer :all]
             [hiccup.page :refer :all]
 
-            [clj-http.client :as http]
-
             [oauth.client :as oauth]
-            [twitter.oauth :as twitter-oauth]
-            [twitter.api.restful :as tr]
-            [twitter.callbacks :as tc]
+            [twitter.api.restful :as restful]
 
             [twitter-oauth-demo.state :as state]
             [twitter-oauth-demo.oauth :as twitter-demo.oauth]))
@@ -128,7 +124,7 @@
     (let [creds (twitter-demo.oauth/make-oauth-creds
                  consumer
                  (state/get-access-token-by-user-id @state/app-state *current-user-id*))]
-      (tr/statuses-update :oauth-creds creds
+      (restful/statuses-update :oauth-creds creds
                           :params {:status tweet})
       (redirect "/tweet-menu"))))
 
