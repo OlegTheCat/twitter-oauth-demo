@@ -45,18 +45,18 @@
 
 (defn session-guard [handler]
   (fn [req]
-    (println "In session guard")
-    (println "Current user id: " *current-user-id*)
-    (println)
+    ;; (println "In session guard")
+    ;; (println "Current user id: " *current-user-id*)
+    ;; (println)
     (if *current-user-id*
       (handler req)
       (redirect "/"))))
 
 (defn wrap-current-user-id [handler]
   (fn [req]
-    (println "In wrap-current-user-id")
-    (println "Cookies: " (:cookies req))
-    (println)
+    ;; (println "In wrap-current-user-id")
+    ;; (println "Cookies: " (:cookies req))
+    ;; (println)
     (let [{:strs [session-id]} (:cookies req)]
       (binding [*current-user-id*
                 (and
@@ -85,14 +85,14 @@
 
 (defroutes login-routes
   (GET "/" []
-    (println "At /")
+    ;; (println "At /")
     (html5
      [:body
       (form-to
        [:get "/exec-login"]
        (submit-button "Log in with Twitter"))]))
   (GET "/exec-login" []
-    (println "At /exec-login")
+    ;; (println "At /exec-login")
     (let [request-token (oauth/request-token consumer "http://localhost:4343/logged")]
       (merge (redirect
               (oauth/user-approval-uri
@@ -100,7 +100,7 @@
                (:oauth_token request-token)))
              {:cookies request-token})))
   (GET "/logged" {params :params cookies :cookies}
-    (println "At /logged")
+    ;; (println "At /logged")
     ;; (println "params: " params)
     ;; (println "cookies: " cookies)
     (let [request-token (construct-request-token-from-cookies cookies)
@@ -111,7 +111,7 @@
                             request-token
                             verifier)
               session-id (state/gen-session-id)]
-          (println "access token: " access-token)
+          ;; (println "access token: " access-token)
           (state/add-new-user!
            (:user_id access-token)
            (:screen_name access-token)
@@ -130,7 +130,7 @@
 
 (defroutes protected-routes
   (GET "/tweet-menu" []
-    (println "At /tweet-menu")
+    ;; (println "At /tweet-menu")
     (html5
      [:body
       (form-to
@@ -139,7 +139,7 @@
        (submit-button "Tweet this!"))
       [:a {:href (str "/exec-logout")} "Get out of here!"]]))
   (POST "/do-tweet" [tweet]
-    (println "Tweet is: " tweet)
+    ;; (println "Tweet is: " tweet)
     (let [creds (twitter-demo.oauth/make-oauth-creds
                  consumer
                  (state/<get-access-token-by-user-id *current-user-id*))]
