@@ -14,10 +14,23 @@
             [hiccup.page :refer :all]
 
             [oauth.client :as oauth]
+
             [twitter.api.restful :as restful]
+            [twitter.callbacks.handlers :as handlers]
 
             [twitter-oauth-demo.state :as state]
-            [twitter-oauth-demo.oauth :as twitter-demo.oauth]))
+            [twitter-oauth-demo.oauth :as twitter-demo.oauth])
+  (:import
+   (twitter.callbacks.protocols SyncSingleCallback)))
+
+(defn default-callback []
+  (SyncSingleCallback. handlers/response-return-everything
+                       (fn [resp]
+                         (let [formatted-resp (handlers/response-return-everything
+                                               resp :to-json? false)]
+                           (throw (ex-info "Errorneous response"
+                                           formatted-resp))))
+                       handlers/exception-rethrow))
 
 (def consumer (twitter-demo.oauth/make-app-consumer))
 
@@ -52,18 +65,17 @@
                  (state/<get-user-id-by-session-id (:value session-id)))]
         (handler req)))))
 
-(defn wrap-valid-access-token [handler]
+(defn wrap-invalid-token-response [handler]
   (fn [req]
-    (println "In wrap-valid-access-token")
-    (println "Current user id: " *current-user-id*)
-    (if *current-user-id*
-      (let [access-token (state/<get-access-token-by-user-id
-                          *current-user-id*)]
-        (println "Token valid?: " (twitter-demo.oauth/valid-access-token? consumer access-token))
-        (if (twitter-demo.oauth/valid-access-token? consumer access-token)
-          (handler req)
-          (redirect "/exec-login")))
-      (handler req))))
+    (try
+      (handler req)
+      (catch clojure.lang.ExceptionInfo e
+        (let [data (ex-data e)]
+          ;; (println "Data: " data)
+          ;; TODO: smth more precise here
+          (if (>= (get-in data [:status :code]) 400)
+            (redirect "/exec-login")
+            (throw e)))))))
 
 (defn redirect-to-menu-if-logged [handler]
   (fn [req]
@@ -132,20 +144,23 @@
                  consumer
                  (state/<get-access-token-by-user-id *current-user-id*))]
       (restful/statuses-update :oauth-creds creds
-                          :params {:status tweet})
+                               :params {:status tweet}
+                               :callbacks (default-callback))
       (redirect "/tweet-menu"))))
 
-(defroutes app
-  (wrap-routes login-routes redirect-to-menu-if-logged)
+(defroutes app-routes
+  login-routes
   logout-routes
   (-> protected-routes
-      (wrap-routes session-guard)
-      (wrap-routes wrap-valid-access-token))
+      (wrap-routes session-guard))
   (route/not-found "<h1>Page not found</h1>"))
 
+(def app (-> app-routes
+             wrap-invalid-token-response
+             wrap-current-user-id
+             wrap-params
+             wrap-cookies
+             wrap-stacktrace))
+
 (comment
-  (def server (jetty/run-jetty (-> #'app
-                                   wrap-current-user-id
-                                   wrap-params
-                                   wrap-cookies
-                                   wrap-stacktrace) {:port 4343 :join? false})))
+  (def server (jetty/run-jetty #'app {:port 4343 :join? false})))
